@@ -1,7 +1,8 @@
 var common = require('../lib/common'),
     request = require('../lib/request'),
     imageLib = require('../lib/image'),
-    urlService = require('../services/url'),
+    urlUtils = require('../lib/url-utils'),
+    urlService = require('../../frontend/services/url'),
     settingsCache = require('./settings/cache'),
     schema = require('../data/schema').checks,
     moment = require('moment'),
@@ -27,6 +28,7 @@ function ping(post) {
     let message,
         title,
         author,
+        description,
         slackData = {},
         slackSettings = getSlackSettings(),
         blogTitle = settingsCache.get('title');
@@ -36,6 +38,14 @@ function ping(post) {
         message = urlService.getUrlByResourceId(post.id, {absolute: true});
         title = post.title ? post.title : null;
         author = post.authors ? post.authors[0] : null;
+
+        if (post.custom_excerpt) {
+            description = post.custom_excerpt;
+        } else if (post.html) {
+            description = `${post.html.replace(/<[^>]+>/g, '').split('.').slice(0, 3).join('.')}.`;
+        } else {
+            description = null;
+        }
     } else {
         message = post.message;
     }
@@ -44,7 +54,7 @@ function ping(post) {
     if (slackSettings && slackSettings.url && slackSettings.url !== '') {
         slackSettings.username = slackSettings.username ? slackSettings.username : 'Ghost';
         // Only ping when not a page
-        if (post.page) {
+        if (post.type === 'page') {
             return;
         }
 
@@ -71,12 +81,12 @@ function ping(post) {
                         title: title,
                         title_link: message,
                         author_name: blogTitle,
-                        image_url: post ? urlService.utils.urlFor('image', {image: post.feature_image}, true) : null,
+                        image_url: post ? urlUtils.urlFor('image', {image: post.feature_image}, true) : null,
                         color: '#008952',
                         fields: [
                             {
                                 title: 'Description',
-                                value: post.custom_excerpt ? post.custom_excerpt : `${post.html.replace(/<[^>]+>/g, '').split('.').slice(0, 3).join('.')}.`,
+                                value: description,
                                 short: false
                             }
                         ]
@@ -84,7 +94,7 @@ function ping(post) {
                     {
                         fallback: 'Sorry, content cannot be shown.',
                         color: '#008952',
-                        thumb_url: author ? urlService.utils.urlFor('image', {image: author.profile_image}, true) : null,
+                        thumb_url: author ? urlUtils.urlFor('image', {image: author.profile_image}, true) : null,
                         fields: [
                             {
                                 title: 'Author',
@@ -116,7 +126,7 @@ function ping(post) {
             common.logging.error(new common.errors.GhostError({
                 err: err,
                 context: common.i18n.t('errors.services.ping.requestFailed.error', {service: 'slack'}),
-                help: common.i18n.t('errors.services.ping.requestFailed.help', {url: 'https://docs.ghost.org'})
+                help: common.i18n.t('errors.services.ping.requestFailed.help', {url: 'https://ghost.org/docs/'})
             }));
         });
     }
